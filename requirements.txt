@@ -9,7 +9,6 @@ aiohttp>=3.9.0
 tenacity>=8.0.0
 python-jose>=3.3.0
 litellm>=1.30.0
-upstash-redis>=1.0.0
 upstash-vector>=0.1.0
 pytest>=7.0.0
 pytest-asyncio>=0.21.0

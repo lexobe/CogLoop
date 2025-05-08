@@ -10,9 +10,7 @@ from ..utils.vector_store import UpstashVectorStore
 from ..utils.config import (
     OPENAI_API_KEY,
     UPSTASH_VECTOR_URL,
-    UPSTASH_VECTOR_TOKEN,
-    UPSTASH_REDIS_URL,
-    UPSTASH_REDIS_TOKEN
+    UPSTASH_VECTOR_TOKEN
 )
 
 class CognitiveLoop:
@@ -45,11 +43,7 @@ class CognitiveLoop:
         
         self.vector_store = UpstashVectorStore(
             vector_url=UPSTASH_VECTOR_URL,
-            vector_token=UPSTASH_VECTOR_TOKEN,
-            redis_url=UPSTASH_REDIS_URL,
-            redis_token=UPSTASH_REDIS_TOKEN,
-            llm_provider=llm_provider,
-            llm_model=self.llm_model
+            vector_token=UPSTASH_VECTOR_TOKEN
         )
         self.weight_updater = MAMWeightUpdater(beta, gamma, b)
         

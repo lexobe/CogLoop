@@ -16,17 +16,13 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 # Upstash 服务配置
 UPSTASH_VECTOR_URL = os.getenv("UPSTASH_VECTOR_URL")
 UPSTASH_VECTOR_TOKEN = os.getenv("UPSTASH_VECTOR_TOKEN")
-UPSTASH_REDIS_URL = os.getenv("UPSTASH_REDIS_URL")
-UPSTASH_REDIS_TOKEN = os.getenv("UPSTASH_REDIS_TOKEN")
 
 def validate_config():
     """验证配置是否完整"""
     required_vars = [
         "OPENAI_API_KEY",
         "UPSTASH_VECTOR_URL",
-        "UPSTASH_VECTOR_TOKEN",
-        "UPSTASH_REDIS_URL",
-        "UPSTASH_REDIS_TOKEN"
+        "UPSTASH_VECTOR_TOKEN"
     ]
     
     missing_vars = [var for var in required_vars if not os.getenv(var)]
