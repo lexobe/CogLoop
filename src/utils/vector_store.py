@@ -7,6 +7,7 @@ import logging
 import json
 from upstash_vector import Index
 from upstash_vector.errors import UpstashError
+from .prompts_config import VECTOR_STORE_CONFIG
 
 # 配置日志
 logging.basicConfig(
@@ -50,19 +51,19 @@ class UpstashVectorStore:
         self,
         vector_url: Optional[str] = None,
         vector_token: Optional[str] = None,
-        embedding_model: str = "BAAI/bge-small-en-v1.5"
+        embedding_model: Optional[str] = None
     ):
         """初始化向量数据库服务
         
         Args:
             vector_url: Upstash Vector API URL，如果为 None 则从环境变量获取
             vector_token: Upstash Vector API Token，如果为 None 则从环境变量获取
-            embedding_model: 嵌入模型名称，默认使用 BAAI/bge-small-en-v1.5
+            embedding_model: 嵌入模型名称，默认使用配置中的模型
         """
         # 初始化 Upstash Vector 配置
         self.vector_url = vector_url or UPSTASH_VECTOR_URL
         self.vector_token = vector_token or UPSTASH_VECTOR_TOKEN
-        self.embedding_model = embedding_model
+        self.embedding_model = embedding_model or VECTOR_STORE_CONFIG["DEFAULT_EMBEDDING_MODEL"]
 
         if not self.vector_url or not self.vector_token:
             logger.error("未配置 Upstash Vector 凭证")
@@ -102,7 +103,7 @@ class UpstashVectorStore:
             try:
                 # 直接使用文本查询进行测试
                 results = self.index.query(
-                    data="健康检查测试",
+                    data=VECTOR_STORE_CONFIG["HEALTH_CHECK_TEXT"],
                     top_k=1,
                     include_metadata=True
                 )
@@ -125,7 +126,7 @@ class UpstashVectorStore:
         content: str,
         weight: float,
         timestamp: float,
-        collection_id: str,
+        collection_id: str = "default",
         metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """添加认元到向量数据库
@@ -172,8 +173,8 @@ class UpstashVectorStore:
         self,
         query: str,
         collection_id: Optional[str] = None,
-        top_k: int = 5,
-        min_score: float = 0.7
+        top_k: Optional[int] = None,
+        min_score: Optional[float] = None
     ) -> List[Tuple[str, Dict[str, Any], float]]:
         """搜索相似认元
         
@@ -183,13 +184,17 @@ class UpstashVectorStore:
         Args:
             query: 查询文本
             collection_id: 认元集合ID，如果指定则只搜索该集合
-            top_k: 返回结果数量
-            min_score: 最小相似度分数
+            top_k: 返回结果数量，默认使用配置值
+            min_score: 最小相似度分数，默认使用配置值
             
         Returns:
             认元列表，每个元素为 (id, metadata, score)
         """
         try:
+            # 使用配置中的默认值
+            top_k = top_k if top_k is not None else VECTOR_STORE_CONFIG["DEFAULT_TOP_K"]
+            min_score = min_score if min_score is not None else VECTOR_STORE_CONFIG["DEFAULT_MIN_SCORE"]
+            
             # 准备查询参数
             query_params = {
                 "data": query,  # 直接使用文本查询
@@ -213,7 +218,7 @@ class UpstashVectorStore:
                 return []
 
             # 计算要返回的结果数量（使用黄金分割比例）
-            num_results = max(1, int(len(results) * GOLDEN_RATIO))
+            num_results = max(1, int(len(results) * VECTOR_STORE_CONFIG["GOLDEN_RATIO"]))
             
             # 过滤并格式化结果
             filtered_results = []
@@ -230,6 +235,59 @@ class UpstashVectorStore:
             return filtered_results
         except Exception as e:
             logger.error(f"搜索相似认元失败: {str(e)}")
+            raise
+
+    async def update_coglet(
+        self,
+        coglet_id: str,
+        weight: float,
+        timestamp: float,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """更新认元权重和时间戳
+        
+        Args:
+            coglet_id: 认元ID
+            weight: 新权重
+            timestamp: 新时间戳
+            metadata: 其他元数据
+            
+        Returns:
+            是否更新成功
+        """
+        try:
+            # 首先获取当前认元
+            results = self.index.fetch([coglet_id])
+            if not results or len(results) == 0:
+                logger.error(f"无法找到认元: {coglet_id}")
+                return False
+                
+            # 获取现有元数据
+            existing_metadata = results[0].metadata
+            
+            # 更新元数据
+            updated_metadata = {
+                **existing_metadata,
+                "weight": weight,
+                "timestamp": timestamp
+            }
+            
+            if metadata:
+                updated_metadata.update(metadata)
+                
+            # 更新认元
+            self.index.upsert([
+                {
+                    "id": coglet_id,
+                    "data": existing_metadata["content"],
+                    "metadata": updated_metadata
+                }
+            ])
+            
+            logger.info(f"已更新认元 {coglet_id} 的权重和时间戳")
+            return True
+        except Exception as e:
+            logger.error(f"更新认元权重和时间戳失败: {str(e)}")
             raise
 
     async def query(

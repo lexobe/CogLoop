@@ -12,6 +12,14 @@ from ..utils.config import (
     UPSTASH_VECTOR_URL,
     UPSTASH_VECTOR_TOKEN
 )
+from ..utils.prompts_config import (
+    LLM_CONFIG,
+    COGNITIVE_LOOP_CONFIG,
+    VECTOR_STORE_CONFIG,
+    get_default_llm_model,
+    get_system_prompt,
+    build_context
+)
 
 class CognitiveLoop:
     """认知循环系统
@@ -21,11 +29,12 @@ class CognitiveLoop:
     
     def __init__(
         self,
-        llm_provider: str = "openai",
+        llm_provider: str = None,
         llm_model: Optional[str] = None,
-        beta: float = 0.8,
-        gamma: float = 1.0,
-        b: float = 0.1
+        beta: Optional[float] = None,
+        gamma: Optional[float] = None,
+        b: Optional[float] = None,
+        prompt_type: str = "DEFAULT"
     ):
         """初始化认知循环
         
@@ -35,27 +44,29 @@ class CognitiveLoop:
             beta: 旧记忆残留因子
             gamma: 新调用强化增益系数
             b: 时间敏感系数
+            prompt_type: 系统提示词类型
         """
         # 配置 litellm
         litellm.api_key = OPENAI_API_KEY
-        self.llm_provider = llm_provider
-        self.llm_model = llm_model or self._get_default_model(llm_provider)
         
+        # 使用配置文件中的默认值
+        self.llm_provider = llm_provider or LLM_CONFIG["DEFAULT_PROVIDER"]
+        self.llm_model = llm_model or get_default_llm_model(self.llm_provider)
+        self.prompt_type = prompt_type
+        self.system_prompt = get_system_prompt(prompt_type)
+        
+        # 初始化向量存储
         self.vector_store = UpstashVectorStore(
             vector_url=UPSTASH_VECTOR_URL,
-            vector_token=UPSTASH_VECTOR_TOKEN
+            vector_token=UPSTASH_VECTOR_TOKEN,
+            embedding_model=VECTOR_STORE_CONFIG["DEFAULT_EMBEDDING_MODEL"]
         )
-        self.weight_updater = MAMWeightUpdater(beta, gamma, b)
         
-    def _get_default_model(self, provider: str) -> str:
-        """获取默认模型名称"""
-        defaults = {
-            "openai": "gpt-4-turbo-preview",
-            "anthropic": "claude-3-opus-20240229",
-            "deepseek": "deepseek-chat",
-            "gemini": "gemini-pro"
-        }
-        return defaults.get(provider, "gpt-4-turbo-preview")
+        # 使用配置文件中的参数初始化权重更新器
+        beta = beta if beta is not None else COGNITIVE_LOOP_CONFIG["beta"]
+        gamma = gamma if gamma is not None else COGNITIVE_LOOP_CONFIG["gamma"]
+        b = b if b is not None else COGNITIVE_LOOP_CONFIG["b"]
+        self.weight_updater = MAMWeightUpdater(beta, gamma, b)
         
     async def process_input(self, input_text: str) -> str:
         """处理输入文本
@@ -69,8 +80,8 @@ class CognitiveLoop:
         # 1. 搜索相似认元
         similar_coglets = await self.vector_store.search_similar(
             query=input_text,
-            top_k=5,
-            min_score=0.7
+            top_k=COGNITIVE_LOOP_CONFIG["default_top_k"],
+            min_score=COGNITIVE_LOOP_CONFIG["default_min_score"]
         )
         
         # 2. 更新认元权重
@@ -93,14 +104,19 @@ class CognitiveLoop:
         # 4. 生成响应
         response = await litellm.acompletion(
             model=f"{self.llm_provider}/{self.llm_model}",
-            messages=[{"role": "user", "content": context}]
+            messages=[
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": context}
+            ],
+            **LLM_CONFIG["DEFAULT_PARAMETERS"]
         )
         
         # 5. 创建新的认元
         await self.vector_store.add_coglet(
             content=input_text,
             weight=1.0,
-            timestamp=current_time
+            timestamp=current_time,
+            collection_id="user_input"
         )
         
         return response.choices[0].message.content
@@ -120,7 +136,8 @@ class CognitiveLoop:
             构造的上下文
         """
         if not similar_coglets:
-            return input_text
+            # 没有相关记忆，直接使用简化版模板
+            return build_context([], input_text)
             
         # 按权重排序
         sorted_coglets = sorted(
@@ -129,15 +146,14 @@ class CognitiveLoop:
             reverse=True
         )
         
-        # 构造上下文
-        context_parts = []
-        for _, metadata, score in sorted_coglets:
-            context_parts.append(
-                f"相关记忆 (权重: {metadata['weight']:.2f}, 相似度: {score:.2f}): "
-                f"{metadata['content']}"
-            )
+        # 转换为 build_context 所需格式
+        memories = []
+        for coglet_id, metadata, score in sorted_coglets:
+            memories.append({
+                "content": metadata["content"],
+                "weight": metadata["weight"],
+                "score": score
+            })
             
-        context = "\n".join(context_parts)
-        context += f"\n\n当前输入: {input_text}"
-        
-        return context 
+        # 使用统一的上下文构建函数
+        return build_context(memories, input_text) 

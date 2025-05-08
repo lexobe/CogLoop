@@ -8,6 +8,7 @@ import sys
 from dotenv import load_dotenv
 from upstash_vector.errors import UpstashError
 from src.utils.vector_store import UpstashVectorStore, check_environment
+from src.utils.prompts_config import VECTOR_STORE_CONFIG
 
 async def check_vector_service(store):
     """详细检查向量服务的各个方面
@@ -31,7 +32,7 @@ async def check_vector_service(store):
     # 检查2: 查询功能
     print("2. 测试查询功能...")
     try:
-        test_query = "健康检查测试"
+        test_query = VECTOR_STORE_CONFIG["HEALTH_CHECK_TEXT"]
         print(f"   执行测试查询: '{test_query}'")
         
         results = store.index.query(
@@ -229,7 +230,7 @@ async def main():
     try:
         # 创建 UpstashVectorStore 实例（使用内置嵌入功能）
         store = UpstashVectorStore(
-            embedding_model="BAAI/bge-small-en-v1.5"  # 显式指定使用的嵌入模型
+            embedding_model=VECTOR_STORE_CONFIG["DEFAULT_EMBEDDING_MODEL"]  # 显式指定使用的嵌入模型
         )
         
         # 基本健康检查
