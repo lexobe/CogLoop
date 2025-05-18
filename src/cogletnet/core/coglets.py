@@ -6,11 +6,9 @@
 
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime
-from src.vector_store import VectorStore
-from src.mam import MAM
-from src.log_config import setup_logger
-
-logger = setup_logger("Coglets")
+from ..utils.vector_store import VectorStore
+from .mam import MAM
+from ..utils.logging import logger
 
 class Coglets:
     """认元管理类，整合向量存储和记忆锚定机制"""
@@ -46,6 +44,8 @@ class Coglets:
             golden_ratio=golden_ratio
         )
         self.top_k = top_k
+        
+        logger.info("Initialized Coglets")
         
     def create_set(self, set_id: str, description: str = "") -> bool:
         """
@@ -83,20 +83,10 @@ class Coglets:
         Returns:
             str: 认元ID
         """
-        # 准备元数据
-        full_metadata = {
-            "weight": self.mam.initial_weight,
-            "last_access": datetime.now().isoformat(),
-            "access_count": 0
-        }
-        
-        # 合并自定义元数据
-        if metadata:
-            full_metadata.update(metadata)
-            
-        # 添加认元
-        logger.info(f"Add coglet: {set_id}, preview: {content[:30]}")
-        return self.vector_store.add_coglet(set_id, content, full_metadata)
+        logger.info(f"Add coglet: set={set_id}, content={content}")
+        cog_id = self.vector_store.add_coglet(set_id, content, metadata or {})
+        self.mam.initialize_weight(cog_id)
+        return cog_id
         
     def add_batch(
         self,
@@ -220,12 +210,22 @@ class Coglets:
         """
         logger.info(f"Recall: set={set_id}, query={query}, top_k={self.top_k}")
         results = self.vector_store.search_similar(set_id, query, self.top_k)
-        activated = self.mam.select_activated_memories(results)
-        logger.info(f"Recall: total={len(results)}, activated={len(activated)}")
+        
+        # 处理结果
+        activated_cogs = []
+        for result in results:
+            cog_id = result["id"]
+            weight = self.mam.get_weight(cog_id)
+            if weight > 0:
+                activated_cogs.append({
+                    "id": cog_id,
+                    "text": result["content"],
+                    "weight": weight
+                })
         
         return {
             "all_results": results,
-            "activated": activated
+            "activated_cogs": activated_cogs
         }
         
     def delete(self, coglet_id: str) -> bool:

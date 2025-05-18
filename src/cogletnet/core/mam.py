@@ -1,43 +1,102 @@
-"""
-记忆锚定机制（Memory Anchor Mechanism）的核心计算工具
+"""记忆锚定机制模块
+
+实现记忆锚定机制（Memory Anchor Mechanism）的核心功能。
 """
 
-import math
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+from typing import Dict, List, Optional
+import time
+
+from ..utils.logging import logger
 
 class MAM:
-    """记忆锚定机制的核心计算工具类"""
+    """记忆锚定机制类
+    
+    实现记忆锚定机制，用于管理认元的权重和激活状态。
+    """
     
     def __init__(
         self,
-        beta: float = 0.85,      # 时间衰减系数
-        gamma: float = 0.3,      # 访问增强系数
-        b: float = 0.05,         # 基础衰减率
-        initial_weight: float = 0.5,  # 初始权重
-        golden_ratio: float = 0.618,  # 黄金分割比例
+        beta: float = 0.85,
+        gamma: float = 0.3,
+        b: float = 0.05,
+        initial_weight: float = 0.5,
+        golden_ratio: float = 0.618,
     ):
-        """
-        初始化MAM计算工具
+        """初始化记忆锚定机制
         
         Args:
-            beta: 时间衰减系数，控制时间对权重的影响程度
-            gamma: 访问增强系数，控制访问对权重的提升程度
-            b: 基础衰减率，控制权重的自然衰减速度
-            initial_weight: 初始权重值
-            golden_ratio: 黄金分割比例，用于记忆激活时的选择比例
+            beta: 时间衰减系数
+            gamma: 访问增强系数
+            b: 基础衰减率
+            initial_weight: 初始权重
+            golden_ratio: 黄金比例
         """
         self.beta = beta
         self.gamma = gamma
         self.b = b
         self.initial_weight = initial_weight
         self.golden_ratio = golden_ratio
+        self.weights: Dict[str, float] = {}
+        self.last_access: Dict[str, float] = {}
+        
+        logger.info("Initialized MAM")
+    
+    def initialize_weight(self, cog_id: str) -> None:
+        """初始化认元权重
+        
+        Args:
+            cog_id: 认元ID
+        """
+        self.weights[cog_id] = self.initial_weight
+        self.last_access[cog_id] = time.time()
+        logger.debug(f"Initialized weight for {cog_id}: {self.initial_weight}")
+    
+    def get_weight(self, cog_id: str) -> float:
+        """获取认元权重
+        
+        Args:
+            cog_id: 认元ID
+            
+        Returns:
+            float: 认元权重
+        """
+        if cog_id not in self.weights:
+            self.initialize_weight(cog_id)
+        return self.weights[cog_id]
+    
+    def update_weight(self, cog_id: str) -> None:
+        """更新认元权重
+        
+        Args:
+            cog_id: 认元ID
+        """
+        current_time = time.time()
+        if cog_id not in self.weights:
+            self.initialize_weight(cog_id)
+            return
+            
+        # 计算时间衰减
+        time_diff = current_time - self.last_access[cog_id]
+        decay = self.beta ** time_diff
+        
+        # 更新权重
+        current_weight = self.weights[cog_id]
+        new_weight = (current_weight * decay + self.gamma) * (1 - self.b)
+        
+        # 应用黄金比例
+        if new_weight > self.golden_ratio:
+            new_weight = self.golden_ratio
+            
+        self.weights[cog_id] = new_weight
+        self.last_access[cog_id] = current_time
+        
+        logger.debug(f"Updated weight for {cog_id}: {new_weight}")
 
     def calculate_weight(
         self,
         current_weight: float,
-        last_access_time: datetime,
-        current_time: datetime,
+        last_access_time: float,
+        current_time: float,
         access_count: int = 0
     ) -> float:
         """
@@ -57,7 +116,7 @@ class MAM:
             return self.initial_weight - self.b
             
         # 计算时间差（小时）
-        time_diff = (current_time - last_access_time).total_seconds() / 3600
+        time_diff = (current_time - last_access_time) / 3600
         
         # 计算时间衰减因子
         time_decay = math.exp(-self.beta * time_diff)
