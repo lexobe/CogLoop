@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cogletnet"
+version = "0.1.0"
+authors = [
+    { name = "Your Name", email = "your.email@example.com" },
+]
+description = "A vector store implementation using Upstash"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "upstash-vector",
+    "python-dotenv",
+    "numpy",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-cov",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "."
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v"
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.hatch.metadata]
+allow-direct-references = true 
