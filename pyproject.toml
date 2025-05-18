@@ -6,21 +6,26 @@ build-backend = "hatchling.build"
 name = "cogletnet"
 version = "0.1.0"
 authors = [
-    { name = "Your Name", email = "your.email@example.com" },
+    { name = "Aiden", email = "aiden@example.com" },
 ]
-description = "A vector store implementation using Upstash"
+description = "A cognitive network implementation using vector store"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "upstash-vector",
     "python-dotenv",
     "numpy",
+    "litellm",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-cov",
+    "black",
+    "isort",
+    "mypy",
+    "ruff",
 ]
 
 [tool.pytest.ini_options]
@@ -36,7 +41,25 @@ markers = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src"]
+packages = ["src/cogletnet"]
 
 [tool.hatch.metadata]
-allow-direct-references = true 
+allow-direct-references = true
+
+[tool.black]
+line-length = 88
+target-version = ["py38"]
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py38" 
